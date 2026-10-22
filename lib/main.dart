@@ -188,8 +188,10 @@ class _FarmHomeState extends State<FarmHome> {
   int idleFrame = 1;
   Timer? _idleTimer;
 
+  // Для еды мы теперь выбираем только один кадр
   int eatFrame = 1;
-  Timer? _eatTimer;
+
+  final Random _random = Random();
 
   final List<String> hungryPhrases = [
     'Я голодная', 'Нужен вкусномс', 'Я же не умею', 'Ну полный му',
@@ -216,26 +218,15 @@ class _FarmHomeState extends State<FarmHome> {
   @override
   void dispose() {
     _idleTimer?.cancel();
-    _eatTimer?.cancel();
     super.dispose();
   }
 
+  // Анимация "стоит": меняется раз в 1 минуту
   void _startIdleAnimation() {
-    _idleTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) {
+    _idleTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted && !isEating && !allDone) {
         setState(() {
-          idleFrame = idleFrame >= 3 ? 1 : idleFrame + 1;
-        });
-      }
-    });
-  }
-
-  void _startEatingAnimation() {
-    eatFrame = 1;
-    _eatTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
-      if (mounted && isEating) {
-        setState(() {
-          eatFrame = eatFrame >= 4 ? 1 : eatFrame + 1;
+          idleFrame = _random.nextInt(3) + 1; // 1, 2 или 3
         });
       }
     });
@@ -256,32 +247,28 @@ class _FarmHomeState extends State<FarmHome> {
   bool get allDone => meds.isNotEmpty && meds.every((m) => m.isDoneToday());
 
   void _randomizePhrases() {
-    currentHungryPhrase = hungryPhrases[Random().nextInt(hungryPhrases.length)];
-    currentEatingPhrase = eatingPhrases[Random().nextInt(eatingPhrases.length)];
-    currentSleepingPhrase = sleepingPhrases[Random().nextInt(sleepingPhrases.length)];
+    currentHungryPhrase = hungryPhrases[_random.nextInt(hungryPhrases.length)];
+    currentEatingPhrase = eatingPhrases[_random.nextInt(eatingPhrases.length)];
+    currentSleepingPhrase = sleepingPhrases[_random.nextInt(sleepingPhrases.length)];
   }
 
   Future<void> _takeDose(Medicine m) async {
     setState(() {
       m.markDose();
       isEating = true;
-      currentEatingPhrase = eatingPhrases[Random().nextInt(eatingPhrases.length)];
-      _startEatingAnimation();
+      currentEatingPhrase = eatingPhrases[_random.nextInt(eatingPhrases.length)];
+      eatFrame = _random.nextInt(4) + 1; // Выбираем ОДНУ случайную картинку еды
     });
     await _persist();
 
-    await Future.delayed(const Duration(milliseconds: 1200));
+    // Держим картинку еды 10 секунд
+    await Future.delayed(const Duration(seconds: 10));
+    
     if (mounted) {
-      _eatTimer?.cancel();
       setState(() {
         isEating = false;
-      });
-    }
-    
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
         _randomizePhrases(); 
+        idleFrame = _random.nextInt(3) + 1; // Сбрасываем на случайную картинку "стоит"
       });
     }
 
