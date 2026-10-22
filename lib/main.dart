@@ -186,6 +186,12 @@ class _FarmHomeState extends State<FarmHome> {
   bool isEating = false;
   bool showHeart = false;
   
+  int idleFrame = 1;
+  Timer? _idleTimer;
+
+  int eatFrame = 1;
+  Timer? _eatTimer;
+
   final List<String> hungryPhrases = [
     'Я голодная', 'Нужен вкусномс', 'Я же не умею', 'Ну полный му',
     'Тефтели', 'И как теперь жить', 'Муууууу',
@@ -205,6 +211,35 @@ class _FarmHomeState extends State<FarmHome> {
   void initState() {
     super.initState();
     _load();
+    _startIdleAnimation();
+  }
+
+  @override
+  void dispose() {
+    _idleTimer?.cancel();
+    _eatTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startIdleAnimation() {
+    _idleTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) {
+      if (mounted && !isEating && !allDone) {
+        setState(() {
+          idleFrame = idleFrame >= 3 ? 1 : idleFrame + 1;
+        });
+      }
+    });
+  }
+
+  void _startEatingAnimation() {
+    _eatFrame = 1;
+    _eatTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
+      if (mounted && isEating) {
+        setState(() {
+          eatFrame = eatFrame >= 4 ? 1 : eatFrame + 1;
+        });
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -232,11 +267,13 @@ class _FarmHomeState extends State<FarmHome> {
       m.markDose();
       isEating = true;
       currentEatingPhrase = eatingPhrases[Random().nextInt(eatingPhrases.length)];
+      _startEatingAnimation();
     });
     await _persist();
 
-    await Future.delayed(const Duration(milliseconds: 1000));
+    await Future.delayed(const Duration(milliseconds: 1200));
     if (mounted) {
+      _eatTimer?.cancel();
       setState(() {
         isEating = false;
         showHeart = true;
@@ -269,7 +306,17 @@ class _FarmHomeState extends State<FarmHome> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           backgroundColor: kCream,
-          title: const Text('Новая корова 🐄'),
+          title: Row(
+            children: [
+              Image.asset(
+                'icon_cow.png', 
+                width: 32, height: 32,
+                errorBuilder: (c, e, s) => const Text('🐄', style: TextStyle(fontSize: 24)),
+              ),
+              const SizedBox(width: 8),
+              const Text('Новая корова'),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -335,15 +382,14 @@ class _FarmHomeState extends State<FarmHome> {
     }
   }
 
-  // ОБНОВЛЕННЫЙ ДНЕВНИК
   void _openHistory(Medicine m) {
     final sorted = [...m.history]..sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Разрешаем окну быть высоким
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.85, // 85% высоты экрана
+        height: MediaQuery.of(context).size.height * 0.85,
         decoration: const BoxDecoration(
           color: kCream,
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
@@ -352,23 +398,24 @@ class _FarmHomeState extends State<FarmHome> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Полоска для свайпа вниз (чтобы закрыть)
             Center(
               child: Container(
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                width: 50, height: 5,
+                decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
               ),
             ),
             const SizedBox(height: 16),
-            Text('📖 Дневник «${m.name}»',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kWood)),
+            Row(
+              children: [
+                const Text('📖 ', style: TextStyle(fontSize: 22)),
+                Expanded(
+                  child: Text('Дневник «${m.name}»',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kWood)),
+                ),
+              ],
+            ),
             const Divider(color: kWood),
             const SizedBox(height: 8),
-            // Список, который можно листать
             Expanded(
               child: sorted.isEmpty 
                 ? const Center(child: Text('Пока пусто', style: TextStyle(color: kWood)))
@@ -376,16 +423,13 @@ class _FarmHomeState extends State<FarmHome> {
                     itemCount: sorted.length,
                     itemBuilder: (_, i) {
                       final h = sorted[i];
-                      final date = h['date'];
-                      final count = h['count'];
-                      final times = (h['times'] as List).join(', ');
                       return Card(
                         color: Colors.white,
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: const Icon(Icons.event, color: kGrass),
-                          title: Text(date, style: const TextStyle(fontWeight: FontWeight.bold, color: kWood)),
-                          subtitle: Text('Выпито: $count/${m.dosesPerDay} ($times)', style: const TextStyle(color: kWood)),
+                          title: Text(h['date'], style: const TextStyle(fontWeight: FontWeight.bold, color: kWood)),
+                          subtitle: Text('Выпито: ${h['count']}/${m.dosesPerDay} (${(h['times'] as List).join(', ')})', style: const TextStyle(color: kWood)),
                         ),
                       );
                     },
@@ -399,16 +443,21 @@ class _FarmHomeState extends State<FarmHome> {
 
   Widget _buildCow() {
     String currentPhrase;
+    String currentImage;
+
     if (allDone) {
       currentPhrase = currentSleepingPhrase;
+      currentImage = 'cow_sleep.png';
     } else if (isEating) {
       currentPhrase = currentEatingPhrase;
+      currentImage = 'cow_eat_$eatFrame.png';
     } else {
       currentPhrase = currentHungryPhrase;
+      currentImage = 'cow_idle_$idleFrame.png';
     }
 
     return Container(
-      height: 200,
+      height: 220,
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -420,9 +469,7 @@ class _FarmHomeState extends State<FarmHome> {
         alignment: Alignment.center,
         children: [
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: Container(
               height: 60,
               decoration: BoxDecoration(
@@ -432,35 +479,24 @@ class _FarmHomeState extends State<FarmHome> {
             ),
           ),
           
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeInOut,
-            bottom: allDone ? 10 : 25, 
-            child: AnimatedRotation(
-              duration: const Duration(milliseconds: 500),
-              turns: allDone ? 0.25 : 0,
-              child: const Text(
-                '🐄',
-                style: TextStyle(fontSize: 95),
-              ),
+          Positioned(
+            bottom: allDone ? 10 : 20, 
+            child: Image.asset(
+              currentImage,
+              height: 130,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Text('🐄', style: TextStyle(fontSize: 90)),
             ),
           ),
           
           Positioned(
             top: 10, 
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
               ),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
@@ -485,9 +521,8 @@ class _FarmHomeState extends State<FarmHome> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addMedicine,
@@ -498,9 +533,7 @@ class _FarmHomeState extends State<FarmHome> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [kSky, kGrass], 
+            begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [kSky, kGrass], 
           ),
         ),
         child: SafeArea(
@@ -508,15 +541,12 @@ class _FarmHomeState extends State<FarmHome> {
             children: [
               const Padding(
                 padding: EdgeInsets.all(12),
-                child: Text('🌿 Моя ферма 🌿',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kWood)),
+                child: Text('🌿 Моя ферма 🌿', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kWood)),
               ),
               if (meds.isNotEmpty) _buildCow(),
               Expanded(
                 child: meds.isEmpty
-                    ? const Center(
-                        child: Text('Пока пусто. Добавь первую корову 🐄',
-                            style: TextStyle(fontSize: 16, color: kWood)))
+                    ? const Center(child: Text('Пока пусто. Добавь первую корову 🐄', style: TextStyle(fontSize: 16, color: kWood)))
                     : ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         itemCount: meds.length,
@@ -526,8 +556,7 @@ class _FarmHomeState extends State<FarmHome> {
                           return Card(
                             color: kCream,
                             margin: const EdgeInsets.only(bottom: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
@@ -535,18 +564,18 @@ class _FarmHomeState extends State<FarmHome> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text(done ? '🐄😋' : '🐄',
-                                          style: const TextStyle(fontSize: 32)),
+                                      // Иконка коровы в карточке
+                                      Image.asset(
+                                        'icon_cow.png', 
+                                        width: 40, height: 40,
+                                        errorBuilder: (c, e, s) => Text(done ? '🐄😋' : '🐄', style: const TextStyle(fontSize: 32)),
+                                      ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(m.name,
-                                                style: const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: kWood)),
+                                            Text(m.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kWood)),
                                             const SizedBox(height: 4),
                                             Row(
                                               children: [
@@ -569,9 +598,16 @@ class _FarmHomeState extends State<FarmHome> {
                                           ],
                                         ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.menu_book, color: kWood),
-                                        onPressed: () => _openHistory(m),
+                                      // Иконка дневника
+                                      GestureDetector(
+                                        onTap: () => _openHistory(m),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Image.asset(
+                                            'book_icon.png', width: 28, height: 28,
+                                            errorBuilder: (c, e, s) => const Icon(Icons.menu_book, color: kWood, size: 28),
+                                          ),
+                                        ),
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.delete_outline, color: kWood),
@@ -580,39 +616,26 @@ class _FarmHomeState extends State<FarmHome> {
                                     ],
                                   ),
                                   const SizedBox(height: 12),
-                                  Text('${m.todayCount()}/${m.dosesPerDay} приёмов сегодня',
-                                      style: const TextStyle(color: kWood, fontSize: 14)),
+                                  Text('${m.todayCount()}/${m.dosesPerDay} приёмов сегодня', style: const TextStyle(color: kWood, fontSize: 14)),
                                   const SizedBox(height: 8),
                                   if (done)
                                     Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: kGrass.withOpacity(0.3),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Text('Нанотельняшки наелись 🐄🧦',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: kWood)),
+                                      width: double.infinity, padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(color: kGrass.withOpacity(0.3), borderRadius: BorderRadius.circular(12)),
+                                      child: const Text('Нанотельняшки наелись 🐄🧦', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kWood)),
                                     )
                                   else
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: kGrass,
-                                          foregroundColor: Colors.white,
+                                          backgroundColor: kGrass, foregroundColor: Colors.white,
                                           padding: const EdgeInsets.symmetric(vertical: 14),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(12)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
                                         onPressed: () => _takeDose(m),
                                         icon: const Text('🥕', style: TextStyle(fontSize: 20)),
-                                        label: const Text('Выпил',
-                                            style: TextStyle(fontSize: 16)),
+                                        label: const Text('Выпил', style: TextStyle(fontSize: 16)),
                                       ),
                                     ),
                                 ],
