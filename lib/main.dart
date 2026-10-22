@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +9,6 @@ import 'package:intl/intl.dart';
 
 const kSky = Color(0xFFB3E5FC);
 const kGrass = Color(0xFF81C784);
-const kHay = Color(0xFFFFF3E0);
 const kWood = Color(0xFF8D6E63);
 const kCream = Color(0xFFFFF8E1);
 
@@ -40,19 +40,26 @@ class PillFarmApp extends StatelessWidget {
 class Medicine {
   String name;
   int dosesPerDay;
+  int health; // Здоровье коровы
   List<Map<String, dynamic>> history;
-  Medicine({required this.name, required this.dosesPerDay, List<Map<String, dynamic>>? history})
-      : history = history ?? [];
+  Medicine({
+    required this.name, 
+    required this.dosesPerDay, 
+    this.health = 100,
+    List<Map<String, dynamic>>? history
+  }) : history = history ?? [];
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'dosesPerDay': dosesPerDay,
+        'health': health,
         'history': history,
       };
 
   factory Medicine.fromJson(Map<String, dynamic> j) => Medicine(
         name: j['name'],
         dosesPerDay: j['dosesPerDay'],
+        health: j['health'] ?? 100,
         history: (j['history'] as List?)?.cast<Map<String, dynamic>>() ?? [],
       );
 
@@ -63,15 +70,6 @@ class Medicine {
       orElse: () => {'date': today, 'count': 0, 'times': []},
     );
     return rec['count'] as int;
-  }
-
-  List<String> todayTimes() {
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final rec = history.firstWhere(
-      (h) => h['date'] == today,
-      orElse: () => {'date': today, 'count': 0, 'times': []},
-    );
-    return (rec['times'] as List).cast<String>();
   }
 
   bool isDoneToday() => todayCount() >= dosesPerDay;
@@ -86,6 +84,9 @@ class Medicine {
       history[idx]['count'] = (history[idx]['count'] as int) + 1;
       (history[idx]['times'] as List).add(now);
     }
+    // Если выпил, здоровье восстанавливается
+    if (health < 100) health += 20;
+    if (health > 100) health = 100;
   }
 }
 
@@ -169,6 +170,10 @@ class FarmHome extends StatefulWidget {
 class _FarmHomeState extends State<FarmHome> {
   List<Medicine> meds = [];
   bool loading = true;
+  
+  // Состояние анимации
+  bool isEating = false;
+  bool showHeart = false;
 
   @override
   void initState() {
@@ -187,9 +192,26 @@ class _FarmHomeState extends State<FarmHome> {
     await NotificationService.rescheduleAll(meds);
   }
 
+  bool get allDone => meds.isNotEmpty && meds.every((m) => m.isDoneToday());
+
   Future<void> _takeDose(Medicine m) async {
-    setState(() => m.markDose());
+    setState(() {
+      m.markDose();
+      isEating = true;
+    });
     await _persist();
+
+    // Анимация поедания
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() {
+        isEating = false;
+        showHeart = true;
+      });
+    }
+    await Future.delayed(const Duration(seconds: 1));
+    if (mounted) setState(() => showHeart = false);
+
     if (m.isDoneToday()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -305,6 +327,104 @@ class _FarmHomeState extends State<FarmHome> {
     );
   }
 
+  // Виджет коровы
+  Widget _buildCow() {
+    String cowEmoji = '🐄';
+    String accessory = '';
+    
+    if (allDone) {
+      cowEmoji = '🐄';
+      accessory = '💤';
+    } else if (isEating) {
+      cowEmoji = '🐄';
+      accessory = '🥕';
+    } else {
+      cowEmoji = '🐄';
+      accessory = '❓'; 
+    }
+
+    return Container(
+      height: 180,
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: kWood.withOpacity(0.2), width: 2),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Земля
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: kGrass,
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+              ),
+            ),
+          ),
+          // Корова
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            bottom: allDone ? 10 : 30, // Если наелась - ложится ниже
+            child: AnimatedRotation(
+              duration: const Duration(milliseconds: 500),
+              turns: allDone ? 0.25 : 0, // Наклон, если лежит
+              child: Text(
+                cowEmoji,
+                style: const TextStyle(fontSize: 90),
+              ),
+            ),
+          ),
+          // Аксессуар (вкусняшка, сон)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            bottom: allDone ? 50 : 110,
+            right: 90,
+            child: AnimatedOpacity(
+              opacity: isEating || allDone || !allDone ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                accessory,
+                style: const TextStyle(fontSize: 40),
+              ),
+            ),
+          ),
+          // Сердечки при поедании
+          if (showHeart)
+            const Positioned(
+              top: 20,
+              child: Text('❤️ ❤️ ❤️', style: TextStyle(fontSize: 30)),
+            ),
+          // Текст
+          if (!allDone && !isEating)
+            Positioned(
+              top: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('Я голодная! Покорми меня! 🥕', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          if (allDone)
+            const Positioned(
+              top: 20,
+              child: Text('Заснула... 💤', style: TextStyle(fontSize: 18, color: Colors.black54, fontWeight: FontWeight.bold)),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -322,24 +442,25 @@ class _FarmHomeState extends State<FarmHome> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [kSky, kGrass],
+            colors: [kSky, Color(0xFFE1F5FE)],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
               const Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(12),
                 child: Text('🌿 Моя ферма 🌿',
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kWood)),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kWood)),
               ),
+              if (meds.isNotEmpty) _buildCow(),
               Expanded(
                 child: meds.isEmpty
                     ? const Center(
                         child: Text('Пока пусто. Добавь первую корову 🐄',
                             style: TextStyle(fontSize: 16, color: kWood)))
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         itemCount: meds.length,
                         itemBuilder: (_, i) {
                           final m = meds[i];
@@ -368,8 +489,26 @@ class _FarmHomeState extends State<FarmHome> {
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
                                                     color: kWood)),
-                                            Text('${m.todayCount()}/${m.dosesPerDay} сегодня',
-                                                style: const TextStyle(color: kWood)),
+                                            const SizedBox(height: 4),
+                                            // Шкала здоровья
+                                            Row(
+                                              children: [
+                                                const Text('❤️ Здоровье: ', style: TextStyle(fontSize: 12, color: kWood)),
+                                                Expanded(
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    child: LinearProgressIndicator(
+                                                      value: m.health / 100,
+                                                      backgroundColor: Colors.grey.shade300,
+                                                      color: m.health > 50 ? Colors.green : Colors.redAccent,
+                                                      minHeight: 8,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text('${m.health}%', style: const TextStyle(fontSize: 12, color: kWood)),
+                                              ],
+                                            )
                                           ],
                                         ),
                                       ),
@@ -383,6 +522,9 @@ class _FarmHomeState extends State<FarmHome> {
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 12),
+                                  Text('${m.todayCount()}/${m.dosesPerDay} приёмов сегодня',
+                                      style: const TextStyle(color: kWood, fontSize: 14)),
                                   const SizedBox(height: 8),
                                   if (done)
                                     Container(
