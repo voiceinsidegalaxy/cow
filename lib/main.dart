@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,8 +8,9 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 
+// Цвета фермы
 const kSky = Color(0xFFB3E5FC);
-const kGrass = Color(0xFF81C784);
+const kGrass = Color(0xFF81C784); // Насыщенный зеленый для низа
 const kWood = Color(0xFF8D6E63);
 const kCream = Color(0xFFFFF8E1);
 
@@ -40,7 +42,7 @@ class PillFarmApp extends StatelessWidget {
 class Medicine {
   String name;
   int dosesPerDay;
-  int health; // Здоровье коровы
+  int health;
   List<Map<String, dynamic>> history;
   Medicine({
     required this.name, 
@@ -84,7 +86,6 @@ class Medicine {
       history[idx]['count'] = (history[idx]['count'] as int) + 1;
       (history[idx]['times'] as List).add(now);
     }
-    // Если выпил, здоровье восстанавливается
     if (health < 100) health += 20;
     if (health > 100) health = 100;
   }
@@ -126,8 +127,20 @@ class NotificationService {
     for (final m in meds) {
       if (m.isDoneToday()) continue;
       for (final h in hours) {
-        final title = '🐄 Му-у! Пора подкрепиться';
-        final body = 'Корова «${m.name}» ждёт свою морковку. Выпей таблетку!';
+        String title;
+        String body;
+        
+        if (h < 12) {
+          title = '🐄 Доброе утро!';
+          body = 'Коровы проснулись и ждут вкусномс. Выпей таблетку «${m.name}»! 🥕';
+        } else if (h < 18) {
+          title = '🐄 Му-у! Может пару тефтель?';
+          body = 'Не забудь выпить «${m.name}». 🌿';
+        } else {
+          title = '🐄 50 бубликов, где?';
+          body = 'Выпей таблетку «${m.name}», корова ждёт! 🥨';
+        }
+
         await _scheduleDaily(id++, title, body, h);
       }
     }
@@ -171,9 +184,34 @@ class _FarmHomeState extends State<FarmHome> {
   List<Medicine> meds = [];
   bool loading = true;
   
-  // Состояние анимации
   bool isEating = false;
   bool showHeart = false;
+  
+  // Твои фразы
+  final List<String> hungryPhrases = [
+    'Я голодная',
+    'Нужен вкусномс',
+    'Я же не умею',
+    'Ну полный му',
+    'Тефтели',
+    'И как теперь жить',
+    'Муууууу',
+  ];
+  final List<String> eatingPhrases = [
+    'Вкусноооомс',
+    'Блэм му-му-му',
+    'Тефтельки',
+    'День свежей травки',
+  ];
+  final List<String> sleepingPhrases = [
+    'Эх родной коровник',
+    'Кавмук устала',
+    'А мои нанотельняшки...',
+  ];
+  
+  String currentHungryPhrase = 'Я голодная';
+  String currentEatingPhrase = 'Вкусноооомс';
+  String currentSleepingPhrase = 'Эх родной коровник';
 
   @override
   void initState() {
@@ -183,6 +221,7 @@ class _FarmHomeState extends State<FarmHome> {
 
   Future<void> _load() async {
     meds = await Store.load();
+    _randomizePhrases();
     setState(() => loading = false);
     await NotificationService.rescheduleAll(meds);
   }
@@ -194,23 +233,34 @@ class _FarmHomeState extends State<FarmHome> {
 
   bool get allDone => meds.isNotEmpty && meds.every((m) => m.isDoneToday());
 
+  void _randomizePhrases() {
+    currentHungryPhrase = hungryPhrases[Random().nextInt(hungryPhrases.length)];
+    currentEatingPhrase = eatingPhrases[Random().nextInt(eatingPhrases.length)];
+    currentSleepingPhrase = sleepingPhrases[Random().nextInt(sleepingPhrases.length)];
+  }
+
   Future<void> _takeDose(Medicine m) async {
     setState(() {
       m.markDose();
       isEating = true;
+      currentEatingPhrase = eatingPhrases[Random().nextInt(eatingPhrases.length)];
     });
     await _persist();
 
-    // Анимация поедания
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 1000));
     if (mounted) {
       setState(() {
         isEating = false;
         showHeart = true;
       });
     }
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) setState(() => showHeart = false);
+    await Future.delayed(const Duration(milliseconds: 1000));
+    if (mounted) {
+      setState(() {
+        showHeart = false;
+        _randomizePhrases(); 
+      });
+    }
 
     if (m.isDoneToday()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -327,98 +377,89 @@ class _FarmHomeState extends State<FarmHome> {
     );
   }
 
-  // Виджет коровы
   Widget _buildCow() {
-    String cowEmoji = '🐄';
-    String accessory = '';
-    
+    String currentPhrase;
     if (allDone) {
-      cowEmoji = '🐄';
-      accessory = '💤';
+      currentPhrase = currentSleepingPhrase;
     } else if (isEating) {
-      cowEmoji = '🐄';
-      accessory = '🥕';
+      currentPhrase = currentEatingPhrase;
     } else {
-      cowEmoji = '🐄';
-      accessory = '❓'; 
+      currentPhrase = currentHungryPhrase;
     }
 
     return Container(
-      height: 180,
+      height: 200,
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.4),
+        color: Colors.white.withOpacity(0.2), // Чуть прозрачнее, чтобы градиент просвечивал
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: kWood.withOpacity(0.2), width: 2),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Земля
+          // Травка внутри загона (темно-зеленая)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              height: 40,
+              height: 60,
               decoration: BoxDecoration(
-                color: kGrass,
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+                color: kGrass, // Сочная трава
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
             ),
           ),
-          // Корова
+          
+          // КОРОВА (опущена вниз)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 500),
             curve: Curves.easeInOut,
-            bottom: allDone ? 10 : 30, // Если наелась - ложится ниже
+            bottom: allDone ? 10 : 25, 
             child: AnimatedRotation(
               duration: const Duration(milliseconds: 500),
-              turns: allDone ? 0.25 : 0, // Наклон, если лежит
-              child: Text(
-                cowEmoji,
-                style: const TextStyle(fontSize: 90),
+              turns: allDone ? 0.25 : 0,
+              child: const Text(
+                '🐄',
+                style: TextStyle(fontSize: 95),
               ),
             ),
           ),
-          // Аксессуар (вкусняшка, сон)
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            bottom: allDone ? 50 : 110,
-            right: 90,
-            child: AnimatedOpacity(
-              opacity: isEating || allDone || !allDone ? 1.0 : 0.0,
+          
+          // ТЕКСТ (поднят в самый верх, чтобы не перекрывать)
+          Positioned(
+            top: 10, 
+            child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              child: Text(
-                accessory,
-                style: const TextStyle(fontSize: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Text(
+                  currentPhrase, 
+                  key: ValueKey(currentPhrase),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kWood),
+                ),
               ),
             ),
           ),
-          // Сердечки при поедании
+          
           if (showHeart)
             const Positioned(
-              top: 20,
+              top: 80, // Сердечки появляются между текстом и коровой
               child: Text('❤️ ❤️ ❤️', style: TextStyle(fontSize: 30)),
-            ),
-          // Текст
-          if (!allDone && !isEating)
-            Positioned(
-              top: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text('Я голодная! Покорми меня! 🥕', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          if (allDone)
-            const Positioned(
-              top: 20,
-              child: Text('Заснула... 💤', style: TextStyle(fontSize: 18, color: Colors.black54, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -438,11 +479,12 @@ class _FarmHomeState extends State<FarmHome> {
         label: const Text('Корова', style: TextStyle(color: Colors.white)),
       ),
       body: Container(
+        // ТОТ САМЫЙ ГРАДИЕНТ: От неба к траве
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [kSky, Color(0xFFE1F5FE)],
+            colors: [kSky, kGrass], // Голубой сверху, зеленый снизу
           ),
         ),
         child: SafeArea(
@@ -490,7 +532,6 @@ class _FarmHomeState extends State<FarmHome> {
                                                     fontWeight: FontWeight.bold,
                                                     color: kWood)),
                                             const SizedBox(height: 4),
-                                            // Шкала здоровья
                                             Row(
                                               children: [
                                                 const Text('❤️ Здоровье: ', style: TextStyle(fontSize: 12, color: kWood)),
