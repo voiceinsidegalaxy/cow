@@ -1,4 +1,3 @@
-
 name: pill_farm
 description: Ферма таблеток
 publish_to: 'none'
@@ -29,4 +28,4 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - ./  # <--- Ищем картинки в корне репозитория
+    - ./
