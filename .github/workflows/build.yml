@@ -27,10 +27,16 @@ jobs:
           cp lib/main.dart temp_app/lib/main.dart
           cp pubspec.yaml temp_app/pubspec.yaml
           cp overrides/AndroidManifest.xml temp_app/android/app/src/main/AndroidManifest.xml
+          # Копируем иконку в проект
+          cp icon.png temp_app/icon.png
 
       - name: Get dependencies
         working-directory: temp_app
         run: flutter pub get
+
+      - name: Generate App Icons
+        working-directory: temp_app
+        run: flutter pub run flutter_launcher_icons
 
       - name: Build APK
         working-directory: temp_app
