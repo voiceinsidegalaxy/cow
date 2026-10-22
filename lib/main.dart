@@ -8,9 +8,8 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 
-// Цвета фермы
 const kSky = Color(0xFFB3E5FC);
-const kGrass = Color(0xFF81C784); // Насыщенный зеленый для низа
+const kGrass = Color(0xFF81C784); 
 const kWood = Color(0xFF8D6E63);
 const kCream = Color(0xFFFFF8E1);
 
@@ -187,26 +186,15 @@ class _FarmHomeState extends State<FarmHome> {
   bool isEating = false;
   bool showHeart = false;
   
-  // Твои фразы
   final List<String> hungryPhrases = [
-    'Я голодная',
-    'Нужен вкусномс',
-    'Я же не умею',
-    'Ну полный му',
-    'Тефтели',
-    'И как теперь жить',
-    'Муууууу',
+    'Я голодная', 'Нужен вкусномс', 'Я же не умею', 'Ну полный му',
+    'Тефтели', 'И как теперь жить', 'Муууууу',
   ];
   final List<String> eatingPhrases = [
-    'Вкусноооомс',
-    'Блэм му-му-му',
-    'Тефтельки',
-    'День свежей травки',
+    'Вкусноооомс', 'Блэм му-му-му', 'Тефтельки', 'День свежей травки',
   ];
   final List<String> sleepingPhrases = [
-    'Эх родной коровник',
-    'Кавмук устала',
-    'А мои нанотельняшки...',
+    'Эх родной коровник', 'Кавмук устала', 'А мои нанотельняшки...',
   ];
   
   String currentHungryPhrase = 'Я голодная';
@@ -347,30 +335,62 @@ class _FarmHomeState extends State<FarmHome> {
     }
   }
 
+  // ОБНОВЛЕННЫЙ ДНЕВНИК
   void _openHistory(Medicine m) {
     final sorted = [...m.history]..sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
     showModalBottomSheet(
       context: context,
-      backgroundColor: kCream,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
+      isScrollControlled: true, // Разрешаем окну быть высоким
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        height: MediaQuery.of(context).size.height * 0.85, // 85% высоты экрана
+        decoration: const BoxDecoration(
+          color: kCream,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Полоска для свайпа вниз (чтобы закрыть)
+            Center(
+              child: Container(
+                width: 50,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Text('📖 Дневник «${m.name}»',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (sorted.isEmpty) const Text('Пока пусто'),
-            ...sorted.take(30).map((h) {
-              final date = h['date'];
-              final count = h['count'];
-              final times = (h['times'] as List).join(', ');
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text('$date — $count/${m.dosesPerDay} ($times)'),
-              );
-            }),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kWood)),
+            const Divider(color: kWood),
+            const SizedBox(height: 8),
+            // Список, который можно листать
+            Expanded(
+              child: sorted.isEmpty 
+                ? const Center(child: Text('Пока пусто', style: TextStyle(color: kWood)))
+                : ListView.builder(
+                    itemCount: sorted.length,
+                    itemBuilder: (_, i) {
+                      final h = sorted[i];
+                      final date = h['date'];
+                      final count = h['count'];
+                      final times = (h['times'] as List).join(', ');
+                      return Card(
+                        color: Colors.white,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: const Icon(Icons.event, color: kGrass),
+                          title: Text(date, style: const TextStyle(fontWeight: FontWeight.bold, color: kWood)),
+                          subtitle: Text('Выпито: $count/${m.dosesPerDay} ($times)', style: const TextStyle(color: kWood)),
+                        ),
+                      );
+                    },
+                  ),
+            ),
           ],
         ),
       ),
@@ -392,14 +412,13 @@ class _FarmHomeState extends State<FarmHome> {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2), // Чуть прозрачнее, чтобы градиент просвечивал
+        color: Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: kWood.withOpacity(0.2), width: 2),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Травка внутри загона (темно-зеленая)
           Positioned(
             bottom: 0,
             left: 0,
@@ -407,13 +426,12 @@ class _FarmHomeState extends State<FarmHome> {
             child: Container(
               height: 60,
               decoration: BoxDecoration(
-                color: kGrass, // Сочная трава
+                color: kGrass,
                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
             ),
           ),
           
-          // КОРОВА (опущена вниз)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 500),
             curve: Curves.easeInOut,
@@ -428,7 +446,6 @@ class _FarmHomeState extends State<FarmHome> {
             ),
           ),
           
-          // ТЕКСТ (поднят в самый верх, чтобы не перекрывать)
           Positioned(
             top: 10, 
             child: AnimatedContainer(
@@ -458,7 +475,7 @@ class _FarmHomeState extends State<FarmHome> {
           
           if (showHeart)
             const Positioned(
-              top: 80, // Сердечки появляются между текстом и коровой
+              top: 80,
               child: Text('❤️ ❤️ ❤️', style: TextStyle(fontSize: 30)),
             ),
         ],
@@ -479,12 +496,11 @@ class _FarmHomeState extends State<FarmHome> {
         label: const Text('Корова', style: TextStyle(color: Colors.white)),
       ),
       body: Container(
-        // ТОТ САМЫЙ ГРАДИЕНТ: От неба к траве
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [kSky, kGrass], // Голубой сверху, зеленый снизу
+            colors: [kSky, kGrass], 
           ),
         ),
         child: SafeArea(
