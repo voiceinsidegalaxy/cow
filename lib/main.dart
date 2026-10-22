@@ -184,7 +184,6 @@ class _FarmHomeState extends State<FarmHome> {
   bool loading = true;
   
   bool isEating = false;
-  bool showHeart = false;
   
   int idleFrame = 1;
   Timer? _idleTimer;
@@ -232,7 +231,7 @@ class _FarmHomeState extends State<FarmHome> {
   }
 
   void _startEatingAnimation() {
-    _eatFrame = 1;
+    eatFrame = 1;
     _eatTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (mounted && isEating) {
         setState(() {
@@ -276,13 +275,12 @@ class _FarmHomeState extends State<FarmHome> {
       _eatTimer?.cancel();
       setState(() {
         isEating = false;
-        showHeart = true;
       });
     }
-    await Future.delayed(const Duration(milliseconds: 1000));
+    
+    await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) {
       setState(() {
-        showHeart = false;
         _randomizePhrases(); 
       });
     }
@@ -508,12 +506,6 @@ class _FarmHomeState extends State<FarmHome> {
               ),
             ),
           ),
-          
-          if (showHeart)
-            const Positioned(
-              top: 80,
-              child: Text('❤️ ❤️ ❤️', style: TextStyle(fontSize: 30)),
-            ),
         ],
       ),
     );
@@ -564,7 +556,6 @@ class _FarmHomeState extends State<FarmHome> {
                                 children: [
                                   Row(
                                     children: [
-                                      // Иконка коровы в карточке
                                       Image.asset(
                                         'icon_cow.png', 
                                         width: 40, height: 40,
@@ -598,7 +589,6 @@ class _FarmHomeState extends State<FarmHome> {
                                           ],
                                         ),
                                       ),
-                                      // Иконка дневника
                                       GestureDetector(
                                         onTap: () => _openHistory(m),
                                         child: Padding(
