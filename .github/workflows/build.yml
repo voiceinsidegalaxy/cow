@@ -1,0 +1,43 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Create fresh Flutter project
+        run: flutter create --org com.farm --project-name pill_farm temp_app
+
+      - name: Override our files
+        run: |
+          cp lib/main.dart temp_app/lib/main.dart
+          cp pubspec.yaml temp_app/pubspec.yaml
+          cp overrides/AndroidManifest.xml temp_app/android/app/src/main/AndroidManifest.xml
+
+      - name: Get dependencies
+        working-directory: temp_app
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: temp_app
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: temp_app/build/app/outputs/flutter-apk/app-release.apk
